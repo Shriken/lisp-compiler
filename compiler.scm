@@ -1,0 +1,10 @@
+(define (compile-program x)
+	(print "\t.text")
+	(print "\t.p2align 4")
+	(print ".globl _scheme_entry")
+	(print "_scheme_entry:")
+	(print "\tmovl $" x ", %eax")
+	(print "\tret")
+)
+
+(compile-program 4)
