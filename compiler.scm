@@ -1,10 +1,13 @@
 (define (compile-program x)
-	(print "\t.text")
-	(print "\t.p2align 4")
+	; function header
+	(print "	.text")
+	(print "	.p2align 4")
 	(print ".globl _scheme_entry")
 	(print "_scheme_entry:")
-	(print "\tmovl $" x ", %eax")
-	(print "\tret")
+
+	; function body
+	(print "	movl $" x ", %eax")
+	(print "	ret")
 )
 
 (compile-program 4)
