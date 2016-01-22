@@ -99,7 +99,15 @@
 	(define (primcall? x)
 		(and
 			(not (atom? x))
-			(map atom? x)
+			(map
+				(lambda (x)
+					(or
+						(atom? x)
+						(primcall? x)
+					)
+				)
+				x
+			)
 		)
 	)
 
