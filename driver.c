@@ -17,6 +17,7 @@
 int main(int argc, char **argv) {
 	int val = scheme_entry();
 
+	printf("val = 0x%x\n", val);
 	if ((val & FIXNUM_MASK) == FIXNUM_TAG) {
 		printf("%d\n", val >> FIXNUM_SHIFT);
 	} else if ((val & CHAR_MASK) == CHAR_TAG) {
@@ -27,7 +28,7 @@ int main(int argc, char **argv) {
 		val >>= BOOL_SHIFT;
 		printf(val ? "true\n" : "false\n");
 	} else {
-		printf("bad value: %x\n", val);
+		printf("bad value\n");
 	}
 
 	return 0;

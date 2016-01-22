@@ -1,6 +1,16 @@
-(define FIXNUM_SHIFT 2)
-(define CHAR_SHIFT 8)
+(define FIXNUM_MASK #x3)
+(define FIXNUM_TAG #x0)
+(define FIXNUM_SHIFT #x2)
+
+(define CHAR_MASK #xff)
 (define CHAR_TAG #xf)
+(define CHAR_SHIFT #x8)
+
+(define EMPTY_LIST #x2f)
+
+(define BOOL_MASK #x7f)
+(define BOOL_TAG #x1f)
+(define BOOL_SHIFT #x7)
 
 (define (compile-program x)
 	; converts an immediate to binary format
@@ -16,8 +26,8 @@
 			((null? x) EMPTY_LIST)
 			((boolean? x)
 				(if x
-					#b10011111
-					#b00011111
+					(bitwise-ior #x80 BOOL_TAG)
+					(bitwise-ior #x00 BOOL_TAG) ; the ior with 0 is just for readability
 				)
 			)
 		)
@@ -37,6 +47,15 @@
 					((sub1)
 						(emit-expr (primcall-operand1 x))
 						(print "	addl $" (immediate-rep -1) ", %eax")
+					)
+					((integer->char)
+						(emit-expr (primcall-operand1 x))
+						(print "	sal $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %eax")
+						(print "	orl $" CHAR_TAG ", %eax")
+					)
+					((char->integer)
+						(emit-expr (primcall-operand1 x))
+						(print "	sar $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %eax")
 					)
 				)
 			)
@@ -73,4 +92,4 @@
 	(print "	ret")
 )
 
-(compile-program `(sub1 (add1 5)))
+(compile-program `(integer->char (add1 (char->integer #\c))))
