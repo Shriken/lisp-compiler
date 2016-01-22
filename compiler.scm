@@ -34,6 +34,10 @@
 						(emit-expr (primcall-operand1 x))
 						(print "	addl $" (immediate-rep 1) ", %eax")
 					)
+					((sub1)
+						(emit-expr (primcall-operand1 x))
+						(print "	addl $" (immediate-rep -1) ", %eax")
+					)
 				)
 			)
 		)
@@ -65,8 +69,8 @@
 	(print "_scheme_entry:")
 
 	; function body
-	(emit-expr `(add1 5))
+	(emit-expr x)
 	(print "	ret")
 )
 
-(compile-program #f)
+(compile-program `(sub1 (add1 5)))
