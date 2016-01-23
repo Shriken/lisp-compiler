@@ -12,6 +12,8 @@
 (define BOOL_TAG #x1f)
 (define BOOL_SHIFT #x7)
 
+(define WORD_SIZE 8)
+
 (define (compile-program x)
 	; converts an immediate to binary format
 	(define (immediate-rep x)
@@ -33,55 +35,68 @@
 		)
 	)
 
-	(define (emit-expr x)
+	(define (emit-expr x stack-index)
 		(cond
 			((immediate? x)
-				(print "	movl $" (immediate-rep x) ", %eax")
+				(print "	movq $" (immediate-rep x) ", %rax")
 			)
-			((primcall? x) (emit-primcall x))
+			((primcall? x) (emit-primcall x stack-index))
 		)
 	)
 
-	(define (emit-primcall x)
+	(define (emit-primcall x stack-index)
 		(define (emit-cmp bin-expr)
-			(print "	cmpl $" bin-expr ", %eax")
-			(print "	movl $0, %eax")
+			(print "	cmpq $" bin-expr ", %rax")
+			(print "	movq $0, %rax")
 			(print "	sete %al")
-			(print "	sall $" BOOL_SHIFT ", %eax")
-			(print "	orl $" BOOL_TAG ", %eax")
+			(print "	salq $" BOOL_SHIFT ", %rax")
+			(print "	orq $" BOOL_TAG ", %rax")
 		)
 
 		(define (emit-type-check-primcall type-mask type-tag x)
-			(emit-expr (primcall-operand1 x))
-			(print "	andl $" type-mask ", %eax")
+			(emit-expr (primcall-operand1 x) stack-index)
+			(print "	andq $" type-mask ", %rax")
 			(emit-cmp type-tag)
 		)
 
 		(case (primcall-op x)
+			; unary primcalls
 			((add1)
-				(emit-expr (primcall-operand1 x))
-				(print "	addl $" (immediate-rep 1) ", %eax")
+				(emit-expr (primcall-operand1 x) stack-index)
+				(print "	addq $" (immediate-rep 1) ", %rax")
 			)
 			((sub1)
-				(emit-expr (primcall-operand1 x))
-				(print "	addl $" (immediate-rep -1) ", %eax")
+				(emit-expr (primcall-operand1 x) stack-index)
+				(print "	addq $" (immediate-rep -1) ", %rax")
 			)
 			((integer->char)
-				(emit-expr (primcall-operand1 x))
-				(print "	sal $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %eax")
-				(print "	orl $" CHAR_TAG ", %eax")
+				(emit-expr (primcall-operand1 x) stack-index)
+				(print "	salq $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %rax")
+				(print "	orq $" CHAR_TAG ", %rax")
 			)
 			((char->integer)
-				(emit-expr (primcall-operand1 x))
-				(print "	sar $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %eax")
+				(emit-expr (primcall-operand1 x) stack-index)
+				(print "	sar $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %rax")
 			)
 			((null?)
-				(emit-expr (primcall-operand1 x))
+				(emit-expr (primcall-operand1 x) stack-index)
 				(emit-cmp EMPTY_LIST)
 			)
 			((integer?) (emit-type-check-primcall FIXNUM_MASK FIXNUM_TAG x))
 			((boolean?) (emit-type-check-primcall BOOL_MASK BOOL_TAG x))
 			((char?) (emit-type-check-primcall CHAR_MASK CHAR_TAG x))
+
+			; binary primcalls
+			((+)
+				; save arg 2 to the stack
+				(emit-expr (primcall-operand2 x) stack-index)
+				(print "	movq %rax, " stack-index "(%rsp)")
+				(emit-expr
+					(primcall-operand1 x)
+					(- stack-index WORD_SIZE)
+				)
+				(print "	addq " stack-index "(%rsp), %rax")
+			)
 
 			(else
 				(print "primcall " (primcall-op x) " not recognized")
@@ -115,6 +130,7 @@
 
 	(define primcall-op car)
 	(define primcall-operand1 cadr)
+	(define primcall-operand2 caddr)
 
 	; function header
 	(print "	.text")
@@ -123,8 +139,8 @@
 	(print "_scheme_entry:")
 
 	; function body
-	(emit-expr x)
+	(emit-expr x (- WORD_SIZE))
 	(print "	ret")
 )
 
-(compile-program `(boolean? (boolean? (integer->char (char->integer #\c)))))
+(compile-program `(boolean? (integer? (+ (+ 3 4) 7))))
