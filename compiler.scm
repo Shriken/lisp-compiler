@@ -35,16 +35,40 @@
 		)
 	)
 
-	(define (emit-expr x stack-index)
+	(define (emit-expr x stack-index env)
 		(cond
 			((immediate? x)
 				(print "	movq $" (immediate-rep x) ", %rax")
 			)
-			((primcall? x) (emit-primcall x stack-index))
+			((let? x) (emit-let (bindings x) (body x) stack-index env))
+			((primcall? x) (emit-primcall x stack-index env))
 		)
 	)
 
-	(define (emit-primcall x stack-index)
+	(define (emit-let bindings body stack-index env)
+		(let f ((b* bindings) (new-si stack-index) (new-env env))
+			(if (null? b*)
+				; if there are no bindings left, run the body
+				(emit-expr body new-si new-env)
+				; if there's another binding, bind it
+				(let ((b (car b*)))
+					(emit-expr b new-si env)
+					(print "	movq %eax, " new-si "(%rsp)")
+					(f
+						(cdr b*)
+						(- new-si WORD_SIZE)
+						(extend-env (car b) new-si new-env)
+					)
+				)
+			)
+		)
+	)
+
+	(define (let? expr)
+		(eqv? (car expr) `let)
+	)
+
+	(define (emit-primcall x stack-index env)
 		(define (emit-cmp bin-expr)
 			(print "	cmpq $" bin-expr ", %rax")
 			(print "	movq $0, %rax")
@@ -53,8 +77,8 @@
 			(print "	orq $" BOOL_TAG ", %rax")
 		)
 
-		(define (emit-type-check-primcall type-mask type-tag x)
-			(emit-expr (primcall-operand1 x) stack-index)
+		(define (emit-type-check-primcall type-mask type-tag x env)
+			(emit-expr (primcall-operand1 x) stack-index env)
 			(print "	andq $" type-mask ", %rax")
 			(emit-cmp type-tag)
 		)
@@ -62,38 +86,39 @@
 		(case (primcall-op x)
 			; unary primcalls
 			((add1)
-				(emit-expr (primcall-operand1 x) stack-index)
+				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	addq $" (immediate-rep 1) ", %rax")
 			)
 			((sub1)
-				(emit-expr (primcall-operand1 x) stack-index)
+				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	addq $" (immediate-rep -1) ", %rax")
 			)
 			((integer->char)
-				(emit-expr (primcall-operand1 x) stack-index)
+				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	salq $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %rax")
 				(print "	orq $" CHAR_TAG ", %rax")
 			)
 			((char->integer)
-				(emit-expr (primcall-operand1 x) stack-index)
+				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	sar $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %rax")
 			)
 			((null?)
-				(emit-expr (primcall-operand1 x) stack-index)
+				(emit-expr (primcall-operand1 x) stack-index env)
 				(emit-cmp EMPTY_LIST)
 			)
-			((integer?) (emit-type-check-primcall FIXNUM_MASK FIXNUM_TAG x))
-			((boolean?) (emit-type-check-primcall BOOL_MASK BOOL_TAG x))
-			((char?) (emit-type-check-primcall CHAR_MASK CHAR_TAG x))
+			((integer?) (emit-type-check-primcall FIXNUM_MASK FIXNUM_TAG x env))
+			((boolean?) (emit-type-check-primcall BOOL_MASK BOOL_TAG x env))
+			((char?) (emit-type-check-primcall CHAR_MASK CHAR_TAG x env))
 
 			; binary primcalls
 			((+)
 				; save arg 2 to the stack
-				(emit-expr (primcall-operand2 x) stack-index)
+				(emit-expr (primcall-operand2 x) stack-index env)
 				(print "	movq %rax, " stack-index "(%rsp)")
 				(emit-expr
 					(primcall-operand1 x)
 					(- stack-index WORD_SIZE)
+					env
 				)
 				(print "	addq " stack-index "(%rsp), %rax")
 			)
@@ -139,7 +164,7 @@
 	(print "_scheme_entry:")
 
 	; function body
-	(emit-expr x (- WORD_SIZE))
+	(emit-expr x (- WORD_SIZE) `())
 	(print "	ret")
 )
 
