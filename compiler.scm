@@ -40,8 +40,34 @@
 			((immediate? x)
 				(print "	movq $" (immediate-rep x) ", %rax")
 			)
+			((variable? x)
+				(print "	movq " (lookup x env) "(%rsp), %rax")
+			)
 			((let? x) (emit-let (bindings x) (body x) stack-index env))
 			((primcall? x) (emit-primcall x stack-index env))
+		)
+	)
+
+	(define variable? symbol?)
+	(define (lookup expr env)
+		(if (null? env)
+			; if there's nothing in the env, throw an error
+			(print "variable not bound: " expr)
+			(let ((env-binding (car env)))
+				(if (eqv? (lhs env-binding) expr)
+					; if we found a match, return the val
+					(rhs env-binding)
+					; otherwise recurse on the rest of the env
+					(lookup expr (cdr env))
+				)
+			)
+		)
+	)
+
+	(define (let? expr)
+		(and
+			(not (atom? expr))
+			(eqv? (car expr) `let)
 		)
 	)
 
@@ -52,20 +78,25 @@
 				(emit-expr body new-si new-env)
 				; if there's another binding, bind it
 				(let ((b (car b*)))
-					(emit-expr b new-si env)
-					(print "	movq %eax, " new-si "(%rsp)")
+					(emit-expr (rhs b) new-si env)
+					(print "	movq %rax, " new-si "(%rsp)")
 					(f
 						(cdr b*)
 						(- new-si WORD_SIZE)
-						(extend-env (car b) new-si new-env)
+						(extend-env (lhs b) new-si new-env)
 					)
 				)
 			)
 		)
 	)
 
-	(define (let? expr)
-		(eqv? (car expr) `let)
+	(define bindings cadr)
+	(define body caddr)
+	(define lhs car)
+	(define rhs cadr)
+
+	(define (extend-env symbol stack-index env)
+		(cons (list symbol stack-index) env)
 	)
 
 	(define (emit-primcall x stack-index env)
@@ -168,4 +199,8 @@
 	(print "	ret")
 )
 
-(compile-program `(boolean? (integer? (+ (+ 3 4) 7))))
+(compile-program
+	`(let ((a (add1 3)) (b (+ 10 3)))
+		(+ a b)
+	)
+)
