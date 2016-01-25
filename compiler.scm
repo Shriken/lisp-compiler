@@ -15,6 +15,20 @@
 (define WORD_SIZE 8)
 
 (define (compile-program x)
+	(define (emit-expr x stack-index env)
+		(cond
+			((immediate? x)
+				(print "	movq $" (immediate-rep x) ", %rax")
+			)
+			((variable? x)
+				(print "	movq " (lookup x env) "(%rsp), %rax")
+			)
+			((if? x) (emit-if (test x) (conseq x) (altern x) stack-index env))
+			((let? x) (emit-let (bindings x) (body x) stack-index env))
+			((primcall? x) (emit-primcall x stack-index env))
+		)
+	)
+
 	; converts an immediate to binary format
 	(define (immediate-rep x)
 		(cond
@@ -32,19 +46,6 @@
 					(bitwise-ior #x00 BOOL_TAG) ; the ior with 0 is just for readability
 				)
 			)
-		)
-	)
-
-	(define (emit-expr x stack-index env)
-		(cond
-			((immediate? x)
-				(print "	movq $" (immediate-rep x) ", %rax")
-			)
-			((variable? x)
-				(print "	movq " (lookup x env) "(%rsp), %rax")
-			)
-			((let? x) (emit-let (bindings x) (body x) stack-index env))
-			((primcall? x) (emit-primcall x stack-index env))
 		)
 	)
 
@@ -98,6 +99,46 @@
 	(define (extend-env symbol stack-index env)
 		(cons (list symbol stack-index) env)
 	)
+
+	(define (if? expr)
+		(and
+			(not (atom? expr))
+			(eqv? (car expr) `if)
+		)
+	)
+
+	(define (emit-if test conseq altern stack-index env)
+		(let ((label-0 (unique-label)) (label-1 (unique-label)))
+			(emit-expr test stack-index env) ; run test
+			(print "	cmpq $" (immediate-rep #f) ", %rax") ; compare #f to %rax
+			(print "	je " label-0) ; jump if %rax is false to the alternative
+			(emit-expr conseq stack-index env) ; run consequent
+			(print "	jmp " label-1); jump to end
+			(emit-label label-0)
+			(emit-expr altern stack-index env) ; run alternative
+			(emit-label label-1) ; end
+		)
+	)
+
+	(define label-counter 0)
+	(define (unique-label)
+		(let
+			((new-label
+				(string-append
+					"scheme_label_"
+					(number->string label-counter)
+				)
+			))
+			(set! label-counter (+ label-counter 1))
+			new-label
+		)
+	)
+
+	(define (emit-label label) (print label ":"))
+
+	(define test cadr)
+	(define conseq caddr)
+	(define altern cadddr)
 
 	(define (emit-primcall x stack-index env)
 		(define (emit-cmp bin-expr)
@@ -189,10 +230,12 @@
 	(define primcall-operand2 caddr)
 
 	; function header
-	(print "	.text")
-	(print "	.p2align 4")
-	(print ".globl _scheme_entry")
-	(print "_scheme_entry:")
+	(let ((func-name "_scheme_entry"))
+		(print "	.text")
+		(print "	.p2align 4")
+		(print ".globl " func-name)
+		(emit-label func-name)
+	)
 
 	; function body
 	(emit-expr x (- WORD_SIZE) `())
@@ -200,7 +243,10 @@
 )
 
 (compile-program
-	`(let ((a (add1 3)) (b (+ 10 3)))
-		(+ a b)
+	`(let ((truth #t))
+		(if truth
+			1
+			0
+		)
 	)
 )
