@@ -12,6 +12,18 @@
 (define BOOL_TAG #x1f)
 (define BOOL_SHIFT #x7)
 
+(define PAIR_MASK #x7)
+(define PAIR_TAG #x1)
+
+(define VECTOR_MASK #x7)
+(define VECTOR_TAG #x2)
+
+(define STRING_MASK #x7)
+(define STRING_TAG #x3)
+
+(define SYMBOL_MASK #x7)
+(define SYMBOL_TAG #x5)
+
 (define WORD_SIZE 8)
 
 (define (compile-program x)
@@ -181,6 +193,18 @@
 			((integer?) (emit-type-check-primcall FIXNUM_MASK FIXNUM_TAG x env))
 			((boolean?) (emit-type-check-primcall BOOL_MASK BOOL_TAG x env))
 			((char?) (emit-type-check-primcall CHAR_MASK CHAR_TAG x env))
+			((pair?) (emit-type-check-primcall PAIR_MASK PAIR_TAG x env))
+			((vector?) (emit-type-check-primcall VECTOR_MASK VECTOR_TAG x env))
+			((string?) (emit-type-check-primcall STRING_MASK STRING_TAG x env))
+			((symbol?) (emit-type-check-primcall SYMBOL_MASK SYMBOL_TAG x env))
+			((car)
+				(emit-expr (primcall-operand1 x) stack-index env)
+				(print "	movq -1(%rax), %rax") ; -1 because the of the pair tag
+			)
+			((cdr)
+				(emit-expr (primcall-operand1 x) stack-index env)
+				(print "	movq " (- WORD_SIZE 1) "(%rax), %rax")
+			)
 
 			; binary primcalls
 			((+)
@@ -193,6 +217,15 @@
 					env
 				)
 				(print "	addq " stack-index "(%rsp), %rax")
+			)
+			((cons)
+				(emit-expr (primcall-operand1 x) stack-index env)
+				(print "	movq %rax, 0(%rsi)")
+				(emit-expr (primcall-operand2 x) stack-index env)
+				(print "	movq %rax, " WORD_SIZE "(%rsi)")
+				(print "	movq %rsi, %rax")
+				(print "	orq $" PAIR_TAG ", %rax")
+				(print "	addq $" (* 2 WORD_SIZE) ", %rsi")
 			)
 
 			(else
@@ -243,10 +276,5 @@
 )
 
 (compile-program
-	`(let ((truth #t))
-		(if truth
-			1
-			0
-		)
-	)
+	`(cdr (cdr (cons 1 (cons 2 3))))
 )
