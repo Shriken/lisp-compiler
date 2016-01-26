@@ -91,7 +91,7 @@
 				(emit-expr body new-si new-env)
 				; if there's another binding, bind it
 				(let ((b (car b*)))
-					(emit-expr (rhs b) new-si env)
+					(emit-expr (rhs b) new-si env) ; use the old env!
 					(print "	movq %rax, " new-si "(%rsp)")
 					(f
 						(cdr b*)
@@ -186,6 +186,7 @@
 				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	sar $" (- CHAR_SHIFT FIXNUM_SHIFT) ", %rax")
 			)
+
 			((null?)
 				(emit-expr (primcall-operand1 x) stack-index env)
 				(emit-cmp EMPTY_LIST)
@@ -197,6 +198,7 @@
 			((vector?) (emit-type-check-primcall VECTOR_MASK VECTOR_TAG x env))
 			((string?) (emit-type-check-primcall STRING_MASK STRING_TAG x env))
 			((symbol?) (emit-type-check-primcall SYMBOL_MASK SYMBOL_TAG x env))
+
 			((car)
 				(emit-expr (primcall-operand1 x) stack-index env)
 				(print "	movq -1(%rax), %rax") ; -1 because the of the pair tag
